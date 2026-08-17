@@ -54,7 +54,9 @@
   .weergave-toggle button.actief{ background:#fff; color:var(--text); }
   .product-preview.donker .weergave-toggle button.actief{ background:#2c3134; color:#f2f3f1; }
   .tegel-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:14px; }
-  .tegel{ border-radius:12px; padding:18px 16px; transition:background .2s ease; }
+  .tegel{ border-radius:12px; padding:18px 16px; transition:background .2s ease; position:relative; }
+  .tegel-badge-preview{ position:absolute; top:10px; right:10px; background:#e5484d; color:#fff; font-size:11px; font-weight:700; min-width:18px; height:18px; border-radius:20px; display:flex; align-items:center; justify-content:center; padding:0 5px; }
+  .tegel-badge-preview.uitroep{ right:34px; }
   .product-preview.donker .tegel{ background:#262723; }
   .product-preview.licht .tegel{ background:#ffffff; border:1px solid var(--border); }
   .tegel-icon{ width:36px; height:36px; border-radius:9px; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
@@ -181,22 +183,22 @@
       <div class="taylormade-card" style="border-color:var(--accent); border-width:1.5px;">
         <div class="icon-wrap"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M20.24 12.24a6 6 0 00-8.49-8.49L5 10.5V19h8.5z"/><path d="M9 15l-4-4"/></svg></div>
         <h3>Ondersteuning, geen controle</h3>
-        <p>Het systeem ondersteunt veiligheid — het controleert geen werknemers. Dat verschil sturen we bewust in elke ontwerpkeuze, van anonieme meldingen tot wie welke data mag inzien.</p>
+        <p>Wij bouwen voor veiligheid, niet voor controle op werknemers. Dat verschil sturen we bewust in elke ontwerpkeuze, van anonieme meldingen tot wie welke data mag inzien.</p>
       </div>
       <div class="taylormade-card" style="border-color:var(--accent); border-width:1.5px;">
         <div class="icon-wrap"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg></div>
         <h3>Communicatie versterken, niet vervangen</h3>
-        <p>Gebouwd om direct contact tussen mensen te bevorderen, niet om ervoor in de plaats te komen. Een app kan een goed gesprek ondersteunen — nooit vervangen.</p>
+        <p>Wij bouwen om direct contact tussen mensen te bevorderen, niet om ervoor in de plaats te komen. Een app kan een goed gesprek ondersteunen — nooit vervangen.</p>
       </div>
       <div class="taylormade-card" style="border-color:var(--accent); border-width:1.5px;">
         <div class="icon-wrap"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
         <h3>Buiten het vaarwater van de lijn</h3>
-        <p>Bewust zo geconstrueerd dat het niet in de plaats komt van lijnverantwoordelijkheid. Wie waarvoor verantwoordelijk is binnen jouw organisatie, blijft precies zo als jij het hebt ingericht.</p>
+        <p>Wij nemen geen verantwoordelijkheid over van de leidinggevende — we dwingen juist af dat de lijn zelf in actie komt. Wie waarvoor verantwoordelijk is, blijft precies zo als jij het hebt ingericht.</p>
       </div>
       <div class="taylormade-card" style="border-color:var(--accent); border-width:1.5px;">
         <div class="icon-wrap"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
         <h3>Gegrond in "Kunnen, Willen, Durven"</h3>
-        <p>Gebouwd in de geest van <em>Kunnen, Willen, Durven: De menselijke maat in veiligheid</em>, geschreven door R.A.A. Hernaus — tevens de grondlegger van AppVoorVeiligheid, onderdeel van VoorVeiligheid.</p>
+        <p>Wij bouwen in de geest van <em>Kunnen, Willen, Durven: De menselijke maat in veiligheid</em>, geschreven door R.A.A. Hernaus — de menselijke maat vóór de papieren vinkjescultuur. Hernaus is tevens de grondlegger van AppVoorVeiligheid, onderdeel van VoorVeiligheid.</p>
       </div>
     </div>
   </div>
@@ -215,7 +217,7 @@
         </div>
       </div>
       <div class="tegel-grid">
-        <div class="tegel"><div class="tegel-icon" style="background:#2f6f5e33; color:#2f6f5e;"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div><div class="tegel-naam">Mijn Acties</div></div>
+        <div class="tegel"><span class="tegel-badge-preview uitroep">!</span><span class="tegel-badge-preview">3</span><div class="tegel-icon" style="background:#2f6f5e33; color:#2f6f5e;"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></div><div class="tegel-naam">Mijn Acties</div></div>
         <div class="tegel"><div class="tegel-icon" style="background:#c0392b33; color:#c0392b;"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L14.7 3.86a2 2 0 00-3.4 0z"/></svg></div><div class="tegel-naam">Meldingen</div></div>
         <div class="tegel"><div class="tegel-icon" style="background:#c0392b33; color:#c0392b;"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M12 2L1 21h22L12 2z"/><line x1="12" y1="9" x2="12" y2="14"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="tegel-naam">Incidenten</div></div>
         <div class="tegel"><div class="tegel-icon" style="background:#f7b50033; color:#b57a10;"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div><div class="tegel-naam">WPI</div></div>
@@ -231,7 +233,7 @@
   <div class="wrap">
     <div class="sectie-kop">
       <div class="eyebrow">Op maat, zonder gedoe</div>
-      <h2>Taylormade opgezet, wij ontzorgen bij het opstarten</h2>
+      <h2>Op maat ingericht, wij ontzorgen bij de start</h2>
     </div>
     <div class="taylormade-grid">
       <div class="taylormade-card">
