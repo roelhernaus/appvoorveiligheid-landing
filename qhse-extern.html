@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>QHSE — Melding indienen</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+<style>
+  :root{
+    --bg:#f4f5f3; --card:#ffffff; --border:#e2e3df; --text:#1c1d1b; --text-soft:#5a5c57;
+    --accent:#2f6f5e; --accent-dim: color-mix(in srgb, var(--accent) 10%, transparent); --red:#c0392b; --red-dim:#fbeae8;
+    --green:#1c9468; --green-dim:#d3f1e3; --amber:#b57a10; --amber-dim:#f6e3bd;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; min-height:100vh; background:var(--bg); font-family:'Inter',sans-serif; color:var(--text); }
+  .wrap{ max-width:480px; margin:0 auto; padding:28px 20px 60px; }
+  .eyebrow{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-soft); margin-bottom:4px; }
+  h1{ font-family:'Oswald',sans-serif; font-weight:600; font-size:22px; margin:0; }
+  .topbar{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:22px; }
+  .whoami{ font-size:12.5px; color:var(--text-soft); }
+  button{ font-family:'Inter',sans-serif; cursor:pointer; border-radius:8px; border:1px solid var(--border); background:#fff; padding:9px 14px; font-size:13px; font-weight:600; }
+  button.ghost{ background:transparent; }
+  button.primary{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:10px; }
+  .row{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .tag{ display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; background:#eee; }
+  .meta{ font-size:12px; color:var(--text-soft); }
+  .fout{ background:var(--red-dim); color:var(--red); font-size:13px; padding:10px 12px; border-radius:8px; margin-top:12px; }
+  .melding{ background:var(--green-dim); color:var(--green); font-size:13px; padding:10px 12px; border-radius:8px; margin-top:12px; }
+  #login-scherm{ max-width:400px; margin:60px auto; }
+  .verborgen{ display:none; }
+  label{ display:block; font-size:12.5px; font-weight:600; margin:12px 0 5px; }
+  label:first-of-type{ margin-top:0; }
+  input, textarea, select{ width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px; font-family:'Inter',sans-serif; font-size:13.5px; background:#fafaf9; }
+  .bericht{ background:var(--bg); border-radius:8px; padding:8px 10px; margin-top:6px; font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<div id="laad-scherm" style="min-height:100vh; display:flex; align-items:center; justify-content:center;">
+  <div style="font-size:13px; color:var(--text-soft);">Laden…</div>
+</div>
+
+<div id="login-scherm" class="wrap verborgen">
+  <div class="eyebrow">QHSE-systeem</div>
+  <h1 style="margin-bottom:18px">Melding indienen</h1>
+  <div class="card">
+    <label>E-mailadres</label>
+    <input type="email" id="loginEmail">
+    <label>Wachtwoord</label>
+    <input type="password" id="loginWachtwoord">
+    <button class="primary" style="width:100%; margin-top:16px" onclick="login()">Inloggen</button>
+    <div class="fout verborgen" id="loginFout"></div>
+    <a href="qhse-wachtwoord-resetten.html" style="display:block; text-align:center; margin-top:12px; font-size:12.5px; color:var(--text-soft); text-decoration:none;">Wachtwoord vergeten?</a>
+  </div>
+  <a href="qhse-registreren-extern.html" style="display:block; text-align:center; margin-top:14px; font-size:12.5px; color:var(--text-soft); text-decoration:none;">Nog geen account? Registreren met uitnodigingscode</a>
+</div>
+
+<div id="geen-toegang" class="wrap verborgen">
+  <div class="card">
+    <b>Dit is de externe portal</b>
+    <p class="meta" style="margin-top:8px">Dit account hoort niet bij een extern-rol. Gebruik het reguliere inlogscherm van het QHSE-systeem.</p>
+    <button class="ghost" style="margin-top:10px" onclick="uitloggen()">Uitloggen</button>
+  </div>
+</div>
+
+<div id="account-inactief" class="wrap verborgen">
+  <div class="card">
+    <b>Dit account is niet (meer) actief</b>
+    <p class="meta" style="margin-top:8px">Neem contact op als je denkt dat dit niet klopt.</p>
+    <button class="ghost" style="margin-top:10px" onclick="uitloggen()">Uitloggen</button>
+  </div>
+</div>
+
+<div id="wachtwoord-verplicht" class="wrap verborgen">
+  <div class="card">
+    <b>Nieuw wachtwoord instellen</b>
+    <p class="meta" style="margin-top:8px">Om verder te gaan, moet je eerst een nieuw wachtwoord instellen.</p>
+    <div style="position:relative; margin-top:10px;">
+      <input type="password" id="nieuwWachtwoordVeldExtern" placeholder="Nieuw wachtwoord (min. 6 tekens, met cijfer of leesteken)" style="padding-right:40px">
+      <button type="button" onclick="toggleWachtwoordZichtbaarExtern(this)" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:16px; padding:4px;">👁️</button>
+    </div>
+    <input type="password" id="nieuwWachtwoordHerhaalVeldExtern" placeholder="Herhaal nieuw wachtwoord" style="margin-top:10px">
+    <button class="primary" style="margin-top:10px; width:100%" onclick="stelNieuwWachtwoordInExtern()">Wachtwoord instellen</button>
+    <div class="fout verborgen" id="nieuwWachtwoordFoutExtern"></div>
+    <button class="ghost" style="margin-top:10px" onclick="uitloggen()">Uitloggen</button>
+  </div>
+</div>
+
+<div id="app-scherm" class="wrap verborgen">
+  <div class="topbar">
+    <div>
+      <div class="eyebrow">QHSE-systeem</div>
+      <h1>Mijn meldingen</h1>
+    </div>
+    <div style="text-align:right">
+      <div class="whoami" id="wieBenIk">—</div>
+      <button class="ghost" style="margin-top:6px" onclick="uitloggen()">Uitloggen</button>
+    </div>
+  </div>
+
+  <button class="primary" style="width:100%; margin-bottom:16px" onclick="nieuweMelding()">+ Nieuwe melding indienen</button>
+  <div id="inhoud"></div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ijxyikkwufmmvpfksarx.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_j2TMYgukTXBMoBW1mv_w2w_3OUxsjBo";
+  let supabaseClient = null;
+  try{ supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }catch(e){ console.error(e); }
+
+  let huidigProfiel = null;
+  let scherm = 'lijst'; // 'lijst' | 'nieuw'
+
+  async function login(){
+    const email = document.getElementById('loginEmail').value.trim();
+    const wachtwoord = document.getElementById('loginWachtwoord').value;
+    const foutEl = document.getElementById('loginFout');
+    foutEl.classList.add('verborgen');
+    if(!supabaseClient){ foutEl.textContent = 'Supabase niet geladen.'; foutEl.classList.remove('verborgen'); return; }
+    try{
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password: wachtwoord });
+      if(error){ foutEl.textContent = 'Inloggen mislukt: ' + error.message; foutEl.classList.remove('verborgen'); return; }
+      await initApp();
+    }catch(e){
+      foutEl.textContent = 'Onverwachte fout: ' + (e && e.message ? e.message : e);
+      foutEl.classList.remove('verborgen');
+    }
+  }
+  function toggleWachtwoordZichtbaarExtern(knop){
+    const veld1 = document.getElementById('nieuwWachtwoordVeldExtern');
+    const veld2 = document.getElementById('nieuwWachtwoordHerhaalVeldExtern');
+    const nuVerborgen = veld1.type === 'password';
+    veld1.type = nuVerborgen ? 'text' : 'password';
+    veld2.type = nuVerborgen ? 'text' : 'password';
+    knop.textContent = nuVerborgen ? '🙈' : '👁️';
+  }
+
+  async function stelNieuwWachtwoordInExtern(){
+    const nieuw = document.getElementById('nieuwWachtwoordVeldExtern').value;
+    const herhaal = document.getElementById('nieuwWachtwoordHerhaalVeldExtern').value;
+    const foutEl = document.getElementById('nieuwWachtwoordFoutExtern');
+    foutEl.classList.add('verborgen');
+    if(!nieuw || nieuw.length < 6 || !/[0-9\W]/.test(nieuw)){
+      foutEl.textContent = 'Wachtwoord moet minimaal 6 tekens zijn, met minstens 1 cijfer of leesteken.';
+      foutEl.classList.remove('verborgen');
+      return;
+    }
+    if(nieuw !== herhaal){
+      foutEl.textContent = 'De twee wachtwoorden komen niet overeen.';
+      foutEl.classList.remove('verborgen');
+      return;
+    }
+    const { error: updateFout } = await supabaseClient.auth.updateUser({ password: nieuw });
+    if(updateFout){ foutEl.textContent = 'Mislukt: ' + updateFout.message; foutEl.classList.remove('verborgen'); return; }
+    const { error: rpcFout } = await supabaseClient.rpc('wachtwoord_zojuist_gewijzigd');
+    if(rpcFout){ foutEl.textContent = 'Wachtwoord gewijzigd, maar opslaan mislukt: ' + rpcFout.message; foutEl.classList.remove('verborgen'); return; }
+    document.getElementById('wachtwoord-verplicht').classList.add('verborgen');
+    await initApp();
+  }
+
+  async function uitloggen(){
+    await supabaseClient.auth.signOut();
+    document.getElementById('app-scherm').classList.add('verborgen');
+    document.getElementById('geen-toegang').classList.add('verborgen');
+    document.getElementById('account-inactief').classList.add('verborgen');
+    document.getElementById('wachtwoord-verplicht').classList.add('verborgen');
+    document.getElementById('login-scherm').classList.remove('verborgen');
+  }
+
+  async function initApp(){
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if(!user) return;
+    const { data: profiel, error } = await supabaseClient
+      .from('profielen').select('id, voornaam, achternaam, rol, organisatie_id, in_dienst, moet_wachtwoord_wijzigen, wachtwoord_laatst_gewijzigd').eq('id', user.id).single();
+    if(error){ alert('Kon profiel niet laden: ' + error.message); return; }
+    document.getElementById('login-scherm').classList.add('verborgen');
+    if(profiel.in_dienst === false){
+      document.getElementById('account-inactief').classList.remove('verborgen');
+      return;
+    }
+    const { data: orgVoorWachtwoord } = await supabaseClient.from('organisaties').select('wachtwoord_interval_maanden').eq('id', profiel.organisatie_id).single();
+    let wachtwoordVerplicht = profiel.moet_wachtwoord_wijzigen === true;
+    if(!wachtwoordVerplicht && orgVoorWachtwoord && orgVoorWachtwoord.wachtwoord_interval_maanden){
+      const laatst = new Date(profiel.wachtwoord_laatst_gewijzigd);
+      const grens = new Date();
+      grens.setMonth(grens.getMonth() - orgVoorWachtwoord.wachtwoord_interval_maanden);
+      if(laatst < grens) wachtwoordVerplicht = true;
+    }
+    if(wachtwoordVerplicht){
+      document.getElementById('wachtwoord-verplicht').classList.remove('verborgen');
+      return;
+    }
+    huidigProfiel = profiel;
+    supabaseClient.from('organisaties').select('accentkleur').eq('id', profiel.organisatie_id).single()
+      .then(({ data: kleurOrg }) => { if(kleurOrg && kleurOrg.accentkleur){ document.documentElement.style.setProperty('--accent', kleurOrg.accentkleur); } });
+    if(profiel.rol !== 'extern'){
+      document.getElementById('geen-toegang').classList.remove('verborgen');
+      return;
+    }
+    document.getElementById('wieBenIk').textContent = profiel.voornaam + ' ' + profiel.achternaam;
+    document.getElementById('app-scherm').classList.remove('verborgen');
+    scherm = 'lijst';
+    await render();
+  }
+
+  async function render(){
+    const inhoud = document.getElementById('inhoud');
+    if(scherm === 'nieuw') inhoud.innerHTML = renderNieuw();
+    else inhoud.innerHTML = await renderLijst();
+  }
+
+  async function renderLijst(){
+    const { data: meldingen, error } = await supabaseClient
+      .from('meldingen').select('*').eq('melder_id', huidigProfiel.id).order('aangemaakt_op', { ascending:false });
+    if(error) return '<div class="fout">Kon meldingen niet laden: ' + error.message + '</div>';
+
+    const kaarten = await Promise.all((meldingen||[]).map(async (m) => {
+      const { data: berichten } = await supabaseClient
+        .from('melding_berichten').select('*').eq('melding_id', m.id).order('aangemaakt_op');
+      const statusKleur = m.status === 'Afgehandeld' ? 'background:var(--green-dim); color:var(--green);'
+        : (m.status === 'In behandeling' ? 'background:var(--amber-dim); color:var(--amber);' : '');
+      let locatieNaam = '';
+      if(m.locatie_id){
+        const { data: loc } = await supabaseClient.from('locaties').select('naam').eq('id', m.locatie_id).maybeSingle();
+        if(loc) locatieNaam = loc.naam;
+      }
+      return `
+        <div class="card">
+          <div class="row">
+            <span class="tag">${m.type}</span>
+            <span class="tag" style="${statusKleur}">${m.status}</span>
+          </div>
+          <div style="font-size:13px; margin-top:8px">${m.omschrijving}</div>
+          ${locatieNaam ? `<div class="meta" style="margin-top:4px">📍 ${locatieNaam}</div>` : ''}
+          ${m.foto_pad ? `<button class="ghost" style="margin-top:8px" onclick="bekijkNmFoto('${m.foto_pad}')">Foto bekijken</button>` : ''}
+          <div class="meta" style="margin-top:6px">${new Date(m.aangemaakt_op).toLocaleDateString('nl-NL')}</div>
+          ${(berichten||[]).map(b => `<div class="bericht">${b.tekst}</div>`).join('')}
+          ${m.status !== 'Afgehandeld' && !m.anoniem ? `
+            <div class="row" style="margin-top:10px; gap:6px;">
+              <input type="text" id="chatVeld${m.id}" placeholder="Typ een bericht…" style="flex:1" onkeydown="if(event.key==='Enter') verstuurNmBericht('${m.id}')">
+              <button class="ghost" onclick="verstuurNmBericht('${m.id}')">Versturen</button>
+            </div>
+          ` : ''}
+        </div>`;
+    }));
+
+    return kaarten.join('') || '<div class="meta">Je hebt nog geen meldingen ingediend.</div>';
+  }
+
+  async function verstuurNmBericht(meldingId){
+    const input = document.getElementById('chatVeld' + meldingId);
+    const tekst = input.value.trim();
+    if(!tekst) return;
+    const { error } = await supabaseClient.from('melding_berichten').insert({ melding_id: meldingId, afzender_id: huidigProfiel.id, tekst });
+    if(error){ alert('Bericht versturen mislukt: ' + error.message); return; }
+    await render();
+  }
+
+  async function bekijkNmFoto(pad){
+    const { data, error } = await supabaseClient.storage.from('meldingen-extern-fotos').createSignedUrl(pad, 300);
+    if(error){ alert('Kon foto niet openen: ' + error.message); return; }
+    window.open(data.signedUrl, '_blank');
+  }
+
+  function nieuweMelding(){
+    scherm = 'nieuw';
+    render();
+    vulNmLocatieKiezer();
+  }
+
+  async function vulNmLocatieKiezer(){
+    const { data: regios } = await supabaseClient.from('regios').select('*').eq('organisatie_id', huidigProfiel.organisatie_id).order('naam');
+    const regioSelect = document.getElementById('nmRegio');
+    if(!regioSelect) return;
+    regioSelect.innerHTML = '<option value="">Regio — geen keuze</option>' + (regios||[]).map(r => `<option value="${r.id}">${r.naam}</option>`).join('');
+    await nmRegioGewijzigd();
+  }
+
+  async function nmRegioGewijzigd(){
+    const regioId = document.getElementById('nmRegio').value;
+    let query = supabaseClient.from('vestigingen').select('*').eq('organisatie_id', huidigProfiel.organisatie_id).order('naam');
+    if(regioId) query = query.eq('regio_id', regioId);
+    const { data: vestigingen } = await query;
+    document.getElementById('nmVestiging').innerHTML = '<option value="">Vestiging — geen keuze</option>' + (vestigingen||[]).map(v => `<option value="${v.id}">${v.naam}</option>`).join('');
+    const { data: locaties } = await supabaseClient.from('locaties').select('*').eq('organisatie_id', huidigProfiel.organisatie_id).order('naam');
+    document.getElementById('nmLocatie').innerHTML = '<option value="">Locatie/project — geen keuze</option>' + (locaties||[]).map(l => `<option value="${l.id}">${l.naam}</option>`).join('');
+  }
+
+  let nmGecomprimeerdeFotoBlob = null;
+
+  async function bepaalOpnameMoment(file){
+    let opnameTijd = null;
+    try{
+      if(window.exifr){
+        const exif = await exifr.parse(file, ['DateTimeOriginal', 'CreateDate']);
+        if(exif) opnameTijd = exif.DateTimeOriginal || exif.CreateDate || null;
+      }
+    }catch(e){ /* geen EXIF, geen probleem */ }
+    if(!opnameTijd) opnameTijd = new Date(file.lastModified);
+    const minutenGeleden = (Date.now() - opnameTijd.getTime()) / 60000;
+    return { opnameTijd, isNetGenomen: minutenGeleden > -5 && minutenGeleden < 5 };
+  }
+
+  async function vraagLocatieOp(){
+    if(!navigator.geolocation) return null;
+    try{
+      const positie = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+      });
+      return `${positie.coords.latitude.toFixed(5)}, ${positie.coords.longitude.toFixed(5)}`;
+    }catch(e){ return null; }
+  }
+
+  function tekenOverlay(ctx, width, height, regels){
+    const fontGrootte = Math.max(14, Math.round(width / 40));
+    ctx.font = `${fontGrootte}px sans-serif`;
+    ctx.textBaseline = 'bottom';
+    const regelHoogte = fontGrootte * 1.3;
+    const padding = fontGrootte * 0.5;
+    const breedste = Math.max(...regels.map(t => ctx.measureText(t).width));
+    const blokHoogte = regels.length * regelHoogte + padding;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(width - breedste - padding*2, height - blokHoogte, breedste + padding*2, blokHoogte);
+    ctx.fillStyle = '#fff';
+    regels.forEach((regel, i) => {
+      ctx.fillText(regel, width - breedste - padding, height - padding - (regels.length-1-i)*regelHoogte);
+    });
+  }
+
+  async function verwerkNmFoto(inputEl){
+    const statusEl = document.getElementById('nmFotoStatus');
+    const knop = document.getElementById('nmVerstuurKnop');
+    nmGecomprimeerdeFotoBlob = null;
+    const file = inputEl.files[0];
+    if(!file) return;
+    knop.disabled = true;
+    knop.textContent = 'Even geduld — foto wordt verwerkt…';
+    statusEl.textContent = 'Foto verwerken…';
+
+    const { opnameTijd, isNetGenomen } = await bepaalOpnameMoment(file);
+    if(isNetGenomen) statusEl.textContent = 'Locatie ophalen (optioneel)…';
+    const locatieTekst = isNetGenomen ? await vraagLocatieOp() : null;
+    statusEl.textContent = 'Foto comprimeren…';
+
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    img.onload = () => {
+      const MAX_AFMETING = 1600;
+      let { width, height } = img;
+      if(width > MAX_AFMETING || height > MAX_AFMETING){
+        const schaal = MAX_AFMETING / Math.max(width, height);
+        width = Math.round(width * schaal);
+        height = Math.round(height * schaal);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      if(isNetGenomen){
+        const regels = [opnameTijd.toLocaleString('nl-NL')];
+        if(locatieTekst) regels.push(locatieTekst);
+        tekenOverlay(ctx, width, height, regels);
+      }
+      canvas.toBlob((blob) => {
+        knop.disabled = false;
+        knop.textContent = 'Melding versturen';
+        if(blob.size > 3 * 1024 * 1024){
+          statusEl.textContent = 'Deze foto is ook na comprimeren te groot (max 3MB). Kies een andere foto.';
+          nmGecomprimeerdeFotoBlob = null;
+          inputEl.value = '';
+          return;
+        }
+        nmGecomprimeerdeFotoBlob = blob;
+        statusEl.textContent = `✓ Klaar (${(blob.size/1024/1024).toFixed(1)}MB)`;
+      }, 'image/jpeg', 0.75);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function renderNieuw(){
+    return `
+      <div class="card">
+        <label style="margin-top:0">Type</label>
+        <select id="nmType">
+          <option value="Onveilige situatie">Onveilige situatie</option>
+          <option value="Incident">Incident</option>
+          <option value="Verbetervoorstel">Verbetervoorstel</option>
+        </select>
+        <label>Omschrijving</label>
+        <textarea rows="4" id="nmOmschrijving" placeholder="Beschrijf zo concreet mogelijk wat je hebt gezien of meegemaakt."></textarea>
+
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:400;">
+          <input type="checkbox" id="nmAnoniem" style="width:auto"> Anoniem melden
+        </label>
+        <div class="meta" style="margin-top:2px">Je identiteit wordt dan ook voor KAM/admin verborgen. Dit kan achteraf niet meer ongedaan gemaakt worden.</div>
+
+        <label style="margin-top:14px">Waar? (optioneel)</label>
+        <select id="nmRegio" onchange="nmRegioGewijzigd()"><option value="">Regio — geen keuze</option></select>
+        <select id="nmVestiging" style="margin-top:8px"><option value="">Vestiging — geen keuze</option></select>
+        <select id="nmLocatie" style="margin-top:8px"><option value="">Locatie/project — geen keuze</option></select>
+
+        <label style="margin-top:14px">Foto (optioneel, max 3MB)</label>
+        <input type="file" accept="image/*" capture="environment" id="nmFoto" onchange="verwerkNmFoto(this)">
+        <div class="meta" id="nmFotoStatus" style="margin-top:4px"></div>
+
+        <div class="row" style="margin-top:16px">
+          <button class="ghost" onclick="scherm='lijst'; render();">Annuleren</button>
+          <button class="primary" id="nmVerstuurKnop" onclick="verstuurMelding()">Melding versturen</button>
+        </div>
+        <div class="fout verborgen" id="nmFout"></div>
+      </div>
+    `;
+  }
+
+  async function verstuurMelding(){
+    const type = document.getElementById('nmType').value;
+    const omschrijving = document.getElementById('nmOmschrijving').value.trim();
+    const foutEl = document.getElementById('nmFout');
+    foutEl.classList.add('verborgen');
+    if(!omschrijving){ foutEl.textContent = 'Omschrijving is verplicht.'; foutEl.classList.remove('verborgen'); return; }
+
+    let fotoPad = null;
+    if(nmGecomprimeerdeFotoBlob){
+      fotoPad = `${huidigProfiel.organisatie_id}/${Date.now()}.jpg`;
+      const { error: fotoFout } = await supabaseClient.storage.from('meldingen-extern-fotos').upload(fotoPad, nmGecomprimeerdeFotoBlob);
+      if(fotoFout){ foutEl.textContent = 'Foto uploaden mislukt: ' + fotoFout.message; foutEl.classList.remove('verborgen'); return; }
+    }
+
+    const anoniem = document.getElementById('nmAnoniem').checked;
+    const vestiging_id = document.getElementById('nmVestiging').value || null;
+    const locatie_id = document.getElementById('nmLocatie').value || null;
+    const { error } = await supabaseClient.from('meldingen').insert({
+      organisatie_id: huidigProfiel.organisatie_id, type, omschrijving, melder_id: huidigProfiel.id, anoniem,
+      vestiging_id, locatie_id, foto_pad: fotoPad
+    });
+    if(error){ foutEl.textContent = 'Indienen mislukt: ' + error.message; foutEl.classList.remove('verborgen'); return; }
+    nmGecomprimeerdeFotoBlob = null;
+    scherm = 'lijst';
+    await render();
+  }
+
+  if(supabaseClient){
+    supabaseClient.auth.getSession().then(({ data:{ session } }) => {
+      document.getElementById('laad-scherm').style.display = 'none';
+      if(session) initApp();
+      else document.getElementById('login-scherm').classList.remove('verborgen');
+    });
+  } else {
+    document.getElementById('laad-scherm').style.display = 'none';
+    document.getElementById('login-scherm').classList.remove('verborgen');
+  }
+</script>
+</body>
+</html>

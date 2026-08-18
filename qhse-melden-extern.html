@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>QHSE — Melding maken</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+<style>
+  :root{
+    --bg:#f4f5f3; --card:#ffffff; --border:#e2e3df; --text:#1c1d1b; --text-soft:#5a5c57;
+    --accent:#2f6f5e; --accent-dim: color-mix(in srgb, var(--accent) 10%, transparent); --red:#c0392b; --red-dim:#fbeae8;
+    --green:#1c9468; --green-dim:#d3f1e3;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; min-height:100vh; background:var(--bg); font-family:'Inter',sans-serif; color:var(--text); }
+  .wrap{ max-width:440px; margin:0 auto; padding:32px 20px 60px; }
+  .eyebrow{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-soft); margin-bottom:4px; }
+  h1{ font-family:'Oswald',sans-serif; font-weight:600; font-size:22px; margin:0 0 4px; }
+  .locatie{ font-size:13px; color:var(--text-soft); margin-bottom:20px; }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:22px; }
+  label{ display:block; font-size:12.5px; font-weight:600; margin:14px 0 5px; }
+  label:first-of-type{ margin-top:0; }
+  input, select, textarea{ width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-family:'Inter',sans-serif; font-size:14px; background:#fafaf9; }
+  textarea{ resize:vertical; }
+  button{ font-family:'Inter',sans-serif; cursor:pointer; border-radius:10px; border:1px solid var(--border); background:#fff; padding:13px 20px; font-size:15px; font-weight:700; width:100%; }
+  button.primary{ background:var(--accent); color:#fff; border-color:var(--accent); margin-top:18px; }
+  .fout{ background:var(--red-dim); color:var(--red); font-size:13px; padding:10px 12px; border-radius:8px; margin-top:12px; }
+  .melding-succes{ background:var(--green-dim); color:var(--green); font-size:14px; padding:16px; border-radius:10px; line-height:1.5; text-align:center; }
+  .verborgen{ display:none; }
+  .contact-blok{ margin-top:6px; padding-top:14px; border-top:1px solid var(--border); }
+  .checkbox-rij{ display:flex; align-items:center; gap:8px; margin-top:16px; }
+  .checkbox-rij input{ width:auto; }
+  .checkbox-rij label{ margin:0; font-weight:600; }
+</style>
+</head>
+<body>
+
+<div id="laad-scherm" style="min-height:100vh; display:flex; align-items:center; justify-content:center;">
+  <div style="font-size:13px; color:var(--text-soft);">Laden…</div>
+</div>
+
+<div id="geen-locatie" class="wrap verborgen">
+  <div class="card">
+    <b>Geen (geldige) locatie</b>
+    <p style="font-size:13px; color:var(--text-soft); margin-top:8px">Scan de QR-code opnieuw, of vraag degene die je 'm gaf om een nieuwe.</p>
+  </div>
+</div>
+
+<div id="wacht-scherm" class="wrap verborgen">
+  <div class="card" style="text-align:center">
+    <b>Je hebt net een melding verstuurd</b>
+    <p style="font-size:13px; color:var(--text-soft); margin-top:8px">Nog even geduld voordat je een nieuwe melding kan maken — dit voorkomt per ongeluk dubbel versturen.<br><span id="wachtTeller" style="font-weight:700; color:var(--text);"></span></p>
+  </div>
+</div>
+
+<div id="form-scherm" class="wrap verborgen">
+  <div class="eyebrow">QHSE-systeem</div>
+  <h1>Melding maken</h1>
+  <div class="locatie" id="locatieNaam">—</div>
+  <div class="card">
+    <label style="margin-top:0">Type</label>
+    <select id="mType" onchange="reageerOpType()">
+      <option value="Onveilige situatie">Onveilige situatie</option>
+      <option value="Incident">Incident</option>
+      <option value="Verbetervoorstel">Verbetervoorstel</option>
+    </select>
+    <label>Omschrijving</label>
+    <textarea rows="5" id="mOmschrijving" placeholder="Beschrijf zo concreet mogelijk wat je hebt gezien of meegemaakt."></textarea>
+
+    <label style="margin-top:14px">Waar precies? (optioneel)</label>
+    <div class="meta" style="margin-bottom:6px">Al ingevuld op basis van de QR-code die je scande — pas het aan als het preciezer kan.</div>
+    <select id="mRegio" onchange="mRegioGewijzigd()"><option value="">Regio — geen keuze</option></select>
+    <select id="mVestiging" style="margin-top:8px"><option value="">Vestiging — geen keuze</option></select>
+    <select id="mLocatie" style="margin-top:8px"><option value="">Locatie/project — geen keuze</option></select>
+
+    <div class="meta verborgen" id="mIncidentUitleg" style="margin-top:14px; padding:10px 12px; background:var(--accent-dim); border-radius:8px;">Bij een incident vragen we altijd om contactgegevens, voor eventuele terugkoppeling of onderzoek.</div>
+    <div class="checkbox-rij" id="mContactRij">
+      <input type="checkbox" id="mContactGewenst" onchange="toggleContactVelden()">
+      <label for="mContactGewenst">Neem contact met mij op</label>
+    </div>
+    <div id="contactVelden" class="contact-blok verborgen">
+      <label style="margin-top:0">Naam</label>
+      <input type="text" id="mNaam">
+      <label>Telefoonnummer</label>
+      <input type="tel" id="mTelefoon" placeholder="0612345678">
+      <div class="fout verborgen" id="mTelefoonFout" style="margin-top:4px; padding:6px 10px; font-size:12px;"></div>
+      <label>E-mailadres</label>
+      <input type="email" id="mEmail" placeholder="naam@voorbeeld.nl">
+      <div class="fout verborgen" id="mEmailFout" style="margin-top:4px; padding:6px 10px; font-size:12px;"></div>
+    </div>
+
+    <label>Foto (optioneel, max 3MB)</label>
+    <input type="file" accept="image/*" capture="environment" id="mFoto" onchange="verwerkFoto(this)">
+    <div class="meta" id="mFotoStatus" style="margin-top:4px"></div>
+    <img id="mFotoPreview" style="display:none; width:100%; max-width:220px; border-radius:8px; margin-top:8px;">
+
+    <button class="primary" id="mVerstuurKnop" onclick="verstuurMelding()">Melding versturen</button>
+    <div class="fout verborgen" id="mFout"></div>
+  </div>
+</div>
+
+<div id="succes-scherm" class="wrap verborgen">
+  <div class="melding-succes">
+    ✓ Bedankt, je melding is verstuurd.<br>Deze komt direct bij de juiste mensen terecht.
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ijxyikkwufmmvpfksarx.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_j2TMYgukTXBMoBW1mv_w2w_3OUxsjBo";
+  let supabaseClient = null;
+  try{ supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }catch(e){ console.error(e); }
+
+  let locatie = null;
+
+  function reageerOpType(){
+    const isIncident = document.getElementById('mType').value === 'Incident';
+    const checkbox = document.getElementById('mContactGewenst');
+    document.getElementById('mIncidentUitleg').classList.toggle('verborgen', !isIncident);
+    document.getElementById('mContactRij').classList.toggle('verborgen', isIncident);
+    if(isIncident){
+      checkbox.checked = true;
+      checkbox.disabled = true;
+    } else {
+      checkbox.disabled = false;
+    }
+    toggleContactVelden();
+  }
+
+  function toggleContactVelden(){
+    document.getElementById('contactVelden').classList.toggle('verborgen', !document.getElementById('mContactGewenst').checked);
+  }
+
+  let gecomprimeerdeFotoBlob = null;
+
+  // Bepaalt of een foto "net genomen" is (EXIF-opnametijd, of anders bestandsdatum, binnen 5 minuten van nu).
+  // Alleen dán vragen we locatietoestemming en branden we tijd+locatie zichtbaar in de foto — bij een foto
+  // uit de galerij (ouder bestand) doen we dat bewust niet, want die tijd/locatie zou misleidend kunnen zijn.
+  async function bepaalOpnameMoment(file){
+    let opnameTijd = null;
+    try{
+      if(window.exifr){
+        const exif = await exifr.parse(file, ['DateTimeOriginal', 'CreateDate']);
+        if(exif) opnameTijd = exif.DateTimeOriginal || exif.CreateDate || null;
+      }
+    }catch(e){ /* geen EXIF, geen probleem */ }
+    if(!opnameTijd) opnameTijd = new Date(file.lastModified);
+    const minutenGeleden = (Date.now() - opnameTijd.getTime()) / 60000;
+    return { opnameTijd, isNetGenomen: minutenGeleden > -5 && minutenGeleden < 5 };
+  }
+
+  async function vraagLocatieOp(){
+    if(!navigator.geolocation) return null;
+    try{
+      const positie = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+      });
+      return `${positie.coords.latitude.toFixed(5)}, ${positie.coords.longitude.toFixed(5)}`;
+    }catch(e){ return null; }
+  }
+
+  function tekenOverlay(ctx, width, height, regels){
+    const fontGrootte = Math.max(14, Math.round(width / 40));
+    ctx.font = `${fontGrootte}px sans-serif`;
+    ctx.textBaseline = 'bottom';
+    const regelHoogte = fontGrootte * 1.3;
+    const padding = fontGrootte * 0.5;
+    const breedste = Math.max(...regels.map(t => ctx.measureText(t).width));
+    const blokHoogte = regels.length * regelHoogte + padding;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(width - breedste - padding*2, height - blokHoogte, breedste + padding*2, blokHoogte);
+    ctx.fillStyle = '#fff';
+    regels.forEach((regel, i) => {
+      ctx.fillText(regel, width - breedste - padding, height - padding - (regels.length-1-i)*regelHoogte);
+    });
+  }
+
+  async function verwerkFoto(inputEl){
+    const statusEl = document.getElementById('mFotoStatus');
+    const previewEl = document.getElementById('mFotoPreview');
+    const knop = document.getElementById('mVerstuurKnop');
+    gecomprimeerdeFotoBlob = null;
+    previewEl.style.display = 'none';
+    const file = inputEl.files[0];
+    if(!file) return;
+
+    knop.disabled = true;
+    knop.textContent = 'Even geduld — foto wordt verwerkt…';
+    statusEl.textContent = 'Foto verwerken…';
+
+    const { opnameTijd, isNetGenomen } = await bepaalOpnameMoment(file);
+    if(isNetGenomen) statusEl.textContent = 'Locatie ophalen (optioneel)…';
+    const locatieTekst = isNetGenomen ? await vraagLocatieOp() : null;
+    statusEl.textContent = 'Foto comprimeren…';
+
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    img.onload = () => {
+      const MAX_AFMETING = 1600;
+      let { width, height } = img;
+      if(width > MAX_AFMETING || height > MAX_AFMETING){
+        const schaal = MAX_AFMETING / Math.max(width, height);
+        width = Math.round(width * schaal);
+        height = Math.round(height * schaal);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      if(isNetGenomen){
+        const regels = [opnameTijd.toLocaleString('nl-NL')];
+        if(locatieTekst) regels.push(locatieTekst);
+        tekenOverlay(ctx, width, height, regels);
+      }
+      canvas.toBlob((blob) => {
+        knop.disabled = false;
+        knop.textContent = 'Melding versturen';
+        if(blob.size > 3 * 1024 * 1024){
+          statusEl.textContent = 'Deze foto is ook na comprimeren te groot (max 3MB). Kies een andere foto.';
+          gecomprimeerdeFotoBlob = null;
+          inputEl.value = '';
+          return;
+        }
+        gecomprimeerdeFotoBlob = blob;
+        statusEl.textContent = `✓ Klaar (${(blob.size/1024/1024).toFixed(1)}MB)`;
+        previewEl.src = URL.createObjectURL(blob);
+        previewEl.style.display = 'block';
+      }, 'image/jpeg', 0.75);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  const AFKOELPERIODE_MS = 2 * 60 * 1000; // 2 minuten
+  const AFKOEL_SLEUTEL = 'qhse_laatste_melding';
+
+  function resterendeWachttijdMs(){
+    const laatste = parseInt(localStorage.getItem(AFKOEL_SLEUTEL) || '0', 10);
+    const verstreken = Date.now() - laatste;
+    return Math.max(0, AFKOELPERIODE_MS - verstreken);
+  }
+
+  function toonWachtteller(){
+    const interval = setInterval(() => {
+      const resterend = resterendeWachttijdMs();
+      if(resterend <= 0){
+        clearInterval(interval);
+        document.getElementById('wacht-scherm').classList.add('verborgen');
+        document.getElementById('form-scherm').classList.remove('verborgen');
+        return;
+      }
+      const seconden = Math.ceil(resterend / 1000);
+      const min = Math.floor(seconden / 60);
+      const sec = seconden % 60;
+      document.getElementById('wachtTeller').textContent = `Nog ${min}:${sec.toString().padStart(2,'0')}`;
+    }, 500);
+  }
+
+  async function vulMLocatieKiezer(){
+    let vooringevuldRegio = '';
+    if(locatie.vestiging_id){
+      const { data: vest } = await supabaseClient.from('vestigingen').select('regio_id').eq('id', locatie.vestiging_id).maybeSingle();
+      if(vest) vooringevuldRegio = vest.regio_id || '';
+    }
+    const { data: regios } = await supabaseClient.from('regios').select('*').eq('organisatie_id', locatie.organisatie_id).order('naam');
+    document.getElementById('mRegio').innerHTML = '<option value="">Regio — geen keuze</option>' + (regios||[]).map(r => `<option value="${r.id}" ${r.id===vooringevuldRegio?'selected':''}>${r.naam}</option>`).join('');
+    await mRegioGewijzigd();
+    if(locatie.vestiging_id) document.getElementById('mVestiging').value = locatie.vestiging_id;
+    document.getElementById('mLocatie').value = locatie.id;
+  }
+
+  async function mRegioGewijzigd(){
+    const regioId = document.getElementById('mRegio').value;
+    let query = supabaseClient.from('vestigingen').select('*').eq('organisatie_id', locatie.organisatie_id).order('naam');
+    if(regioId) query = query.eq('regio_id', regioId);
+    const { data: vestigingen } = await query;
+    document.getElementById('mVestiging').innerHTML = '<option value="">Vestiging — geen keuze</option>' + (vestigingen||[]).map(v => `<option value="${v.id}">${v.naam}</option>`).join('');
+    const { data: locaties } = await supabaseClient.from('locaties').select('*').eq('organisatie_id', locatie.organisatie_id).order('naam');
+    document.getElementById('mLocatie').innerHTML = '<option value="">Locatie/project — geen keuze</option>' + (locaties||[]).map(l => `<option value="${l.id}">${l.naam}</option>`).join('');
+  }
+
+  async function init(){
+    const code = new URLSearchParams(window.location.search).get('locatie');
+    document.getElementById('laad-scherm').style.display = 'none';
+    if(!code || !supabaseClient){
+      document.getElementById('geen-locatie').classList.remove('verborgen');
+      return;
+    }
+    const { data, error } = await supabaseClient.from('locaties').select('*').eq('qr_code', code).maybeSingle();
+    if(error || !data){
+      document.getElementById('geen-locatie').classList.remove('verborgen');
+      return;
+    }
+    locatie = data;
+    supabaseClient.from('organisaties').select('accentkleur').eq('id', locatie.organisatie_id).single()
+      .then(({ data: kleurOrg }) => { if(kleurOrg && kleurOrg.accentkleur){ document.documentElement.style.setProperty('--accent', kleurOrg.accentkleur); } });
+    document.getElementById('locatieNaam').textContent = locatie.naam;
+    await vulMLocatieKiezer();
+
+    if(resterendeWachttijdMs() > 0){
+      document.getElementById('wacht-scherm').classList.remove('verborgen');
+      toonWachtteller();
+    } else {
+      document.getElementById('form-scherm').classList.remove('verborgen');
+    }
+  }
+
+  function valideerTelefoon(waarde){
+    const opgeschoond = waarde.replace(/[\s-]/g, '');
+    return /^0\d{9}$/.test(opgeschoond);
+  }
+  function valideerEmail(waarde){
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(waarde);
+  }
+
+  async function verstuurMelding(){
+    const fotoInputEl = document.getElementById('mFoto');
+    if(fotoInputEl.files[0] && !gecomprimeerdeFotoBlob){
+      document.getElementById('mFout').textContent = 'De foto wordt nog verwerkt — wacht heel even tot er "✓ Klaar" staat.';
+      document.getElementById('mFout').classList.remove('verborgen');
+      return;
+    }
+
+    const type = document.getElementById('mType').value;
+    const omschrijving = document.getElementById('mOmschrijving').value.trim();
+    const contactGewenst = document.getElementById('mContactGewenst').checked;
+    const naam = contactGewenst ? document.getElementById('mNaam').value.trim() : null;
+    const telefoon = contactGewenst ? document.getElementById('mTelefoon').value.trim() : null;
+    const email = contactGewenst ? document.getElementById('mEmail').value.trim() : null;
+    const foutEl = document.getElementById('mFout');
+    const telefoonFoutEl = document.getElementById('mTelefoonFout');
+    const emailFoutEl = document.getElementById('mEmailFout');
+    foutEl.classList.add('verborgen');
+    telefoonFoutEl.classList.add('verborgen');
+    emailFoutEl.classList.add('verborgen');
+
+    if(!omschrijving){ foutEl.textContent = 'Omschrijving is verplicht.'; foutEl.classList.remove('verborgen'); return; }
+
+    if(contactGewenst){
+      if(!naam || !telefoon || !email){
+        foutEl.textContent = type === 'Incident'
+          ? 'Bij een incident zijn naam, telefoonnummer en e-mailadres verplicht.'
+          : 'Vul naam, telefoonnummer en e-mailadres in, of zet het vinkje weer uit.';
+        foutEl.classList.remove('verborgen');
+        return;
+      }
+      if(!valideerTelefoon(telefoon)){
+        telefoonFoutEl.textContent = 'Vul een geldig Nederlands telefoonnummer in (10 cijfers, begint met 0).';
+        telefoonFoutEl.classList.remove('verborgen');
+        return;
+      }
+      if(!valideerEmail(email)){
+        emailFoutEl.textContent = 'Vul een geldig e-mailadres in.';
+        emailFoutEl.classList.remove('verborgen');
+        return;
+      }
+    }
+
+    let fotoPad = null;
+    if(gecomprimeerdeFotoBlob){
+      fotoPad = `${locatie.organisatie_id}/${Date.now()}.jpg`;
+      const { error: fotoFout } = await supabaseClient.storage.from('meldingen-extern-fotos').upload(fotoPad, gecomprimeerdeFotoBlob);
+      if(fotoFout){ foutEl.textContent = 'Foto uploaden mislukt: ' + fotoFout.message; foutEl.classList.remove('verborgen'); return; }
+    }
+
+    const gekozenVestiging = document.getElementById('mVestiging').value || locatie.vestiging_id || null;
+    const gekozenLocatie = document.getElementById('mLocatie').value || locatie.id;
+    const { error } = await supabaseClient.from('meldingen').insert({
+      organisatie_id: locatie.organisatie_id,
+      type, omschrijving,
+      locatie_id: gekozenLocatie,
+      vestiging_id: gekozenVestiging,
+      extern_naam: naam,
+      extern_telefoon: telefoon,
+      extern_email: email,
+      foto_pad: fotoPad,
+      melder_id: null
+    });
+    if(error){ foutEl.textContent = 'Versturen mislukt: ' + error.message; foutEl.classList.remove('verborgen'); return; }
+
+    localStorage.setItem(AFKOEL_SLEUTEL, Date.now().toString());
+    document.getElementById('form-scherm').classList.add('verborgen');
+    document.getElementById('succes-scherm').classList.remove('verborgen');
+  }
+
+  init();
+</script>
+</body>
+</html>

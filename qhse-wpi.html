@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>QHSE — WPI</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+<style>
+  :root{
+    --bg:#f4f5f3; --card:#ffffff; --border:#e2e3df; --text:#1c1d1b; --text-soft:#5a5c57;
+    --accent:#2f6f5e; --accent-dim: color-mix(in srgb, var(--accent) 10%, transparent); --amber:#b57a10; --amber-dim:#f6e3bd;
+    --red:#c0392b; --red-dim:#fbeae8; --green:#1c9468; --green-dim:#d3f1e3;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; min-height:100vh; background:var(--bg); font-family:'Inter',sans-serif; color:var(--text); }
+  .wrap{ max-width:680px; margin:0 auto; padding:28px 20px 60px; }
+  .eyebrow{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-soft); margin-bottom:4px; }
+  h1{ font-family:'Oswald',sans-serif; font-weight:600; font-size:24px; margin:0; }
+  .topbar{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:22px; }
+  .whoami{ font-size:12.5px; color:var(--text-soft); }
+  button{ font-family:'Inter',sans-serif; cursor:pointer; border-radius:8px; border:1px solid var(--border); background:#fff; padding:9px 14px; font-size:13px; font-weight:600; }
+  button.primary{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.ghost{ background:transparent; }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  input, textarea, select{ width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px; font-family:'Inter',sans-serif; font-size:13.5px; background:#fafaf9; }
+  label{ display:block; font-size:12.5px; font-weight:600; margin:12px 0 5px; }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .klikbaar{ cursor:pointer; }
+  .row{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .tag{ display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; background:#eee; }
+  .tag.kritiek{ background:var(--red-dim); color:var(--red); }
+  .toggle{ display:flex; gap:6px; }
+  .toggle button{ flex:1; }
+  .toggle button.actief{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .fout{ background:var(--red-dim); color:var(--red); font-size:13px; padding:10px 12px; border-radius:8px; margin-top:12px; }
+  .meta{ font-size:12px; color:var(--text-soft); }
+  #login-scherm{ max-width:400px; margin:80px auto; }
+  .verborgen{ display:none; }
+  .waarschuwing{ background:var(--amber-dim); color:var(--amber); font-size:12.5px; padding:9px 12px; border-radius:8px; margin-top:8px; }
+</style>
+</head>
+<body>
+
+<div id="laad-scherm" style="min-height:100vh; display:flex; align-items:center; justify-content:center;">
+  <div style="font-size:13px; color:var(--text-soft, #5a5c57);">Laden…</div>
+</div>
+
+<div id="login-scherm" class="wrap verborgen">
+  <div class="eyebrow">QHSE-systeem</div>
+  <h1 style="margin-bottom:18px">Inloggen</h1>
+  <div class="card">
+    <label style="margin-top:0">E-mailadres</label>
+    <input type="email" id="loginEmail">
+    <label>Wachtwoord</label>
+    <input type="password" id="loginWachtwoord">
+    <button class="primary" style="width:100%; margin-top:16px" onclick="login()">Inloggen</button>
+    <div class="fout verborgen" id="loginFout"></div>
+  </div>
+</div>
+
+<div id="app-scherm" class="wrap verborgen">
+  <div class="topbar">
+    <div>
+      <div class="eyebrow">QHSE-systeem</div>
+      <h1>Werkplekinspecties</h1>
+    </div>
+    <div style="text-align:right">
+      <div class="whoami" id="wieBenIk">—</div>
+      <button class="ghost btn-uitloggen-lokaal" style="margin-top:6px" onclick="uitloggen()">Uitloggen</button>
+    </div>
+  </div>
+  <div id="inhoud"></div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://ijxyikkwufmmvpfksarx.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_j2TMYgukTXBMoBW1mv_w2w_3OUxsjBo";
+  let supabaseClient = null;
+  try{ supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }catch(e){ console.error(e); }
+
+  // Binnen de schil geopend? Dan hoort uitloggen via de schil zelf te gaan,
+  // niet via deze losse knop (die anders alleen dit venster resette, terwijl
+  // de schil eromheen nergens van wist).
+  if(window.self !== window.top){
+    const verbergUitlogKnoppenLokaal = () => {
+      document.querySelectorAll('.btn-uitloggen-lokaal').forEach(b => b.style.display = 'none');
+    };
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', verbergUitlogKnoppenLokaal);
+    } else {
+      verbergUitlogKnoppenLokaal();
+    }
+  }
+
+  let huidigProfiel = null;
+  let scherm = 'lijst'; // 'lijst' | 'kiezen' | 'invullen'
+  let actiefBezoek = null; // { id, formulier, vragen, antwoorden:{}, fotos:{} }
+
+  async function login(){
+    const email = document.getElementById('loginEmail').value.trim();
+    const wachtwoord = document.getElementById('loginWachtwoord').value;
+    const foutEl = document.getElementById('loginFout');
+    foutEl.classList.add('verborgen');
+    if(!supabaseClient){ foutEl.textContent = 'Supabase niet geladen.'; foutEl.classList.remove('verborgen'); return; }
+    try{
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password: wachtwoord });
+      if(error){ foutEl.textContent = 'Inloggen mislukt: ' + error.message; foutEl.classList.remove('verborgen'); return; }
+      await initApp();
+    }catch(e){
+      foutEl.textContent = 'Onverwachte fout: ' + (e && e.message ? e.message : e);
+      foutEl.classList.remove('verborgen');
+    }
+  }
+  async function uitloggen(){
+    await supabaseClient.auth.signOut();
+    document.getElementById('app-scherm').classList.add('verborgen');
+    document.getElementById('login-scherm').classList.remove('verborgen');
+  }
+  async function initApp(){
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if(!user) return;
+    const { data: profiel, error } = await supabaseClient
+      .from('profielen').select('id, voornaam, achternaam, rol, organisatie_id').eq('id', user.id).single();
+    if(error){ alert('Kon profiel niet laden: ' + error.message); return; }
+    huidigProfiel = profiel;
+    supabaseClient.from('organisaties').select('accentkleur').eq('id', profiel.organisatie_id).single()
+      .then(({ data: kleurOrg }) => { if(kleurOrg && kleurOrg.accentkleur){ document.documentElement.style.setProperty('--accent', kleurOrg.accentkleur); } });
+    document.getElementById('wieBenIk').textContent = profiel.voornaam + ' ' + profiel.achternaam + ' · ' + profiel.rol;
+    document.getElementById('login-scherm').classList.add('verborgen');
+    document.getElementById('app-scherm').classList.remove('verborgen');
+    scherm = 'lijst';
+    await render();
+  }
+
+  async function render(){
+    const inhoud = document.getElementById('inhoud');
+    if(scherm === 'lijst') inhoud.innerHTML = await renderLijst();
+    else if(scherm === 'kiezen') inhoud.innerHTML = await renderKiezen();
+    else if(scherm === 'locatieKiezen') inhoud.innerHTML = renderLocatieKiezen();
+    else if(scherm === 'invullen') inhoud.innerHTML = renderInvullen();
+  }
+
+  async function renderLijst(){
+    const { data: bezoeken, error } = await supabaseClient
+      .from('wpi_bezoeken').select('*, wpi_formulieren!inner(naam, soort)')
+      .eq('uitvoerder_id', huidigProfiel.id).eq('wpi_formulieren.soort', 'wpi').eq('verborgen_voor_uitvoerder', false)
+      .order('aangemaakt_op', { ascending:false });
+    if(error) return '<div class="fout">Kon bezoeken niet laden: ' + error.message + '</div>';
+    const rows = (bezoeken||[]).map(b => `
+      <div class="card ${!b.afgerond ? 'klikbaar' : ''}" ${!b.afgerond ? `onclick="startBezoek('${b.formulier_id}')"` : ''}>
+        <div class="row">
+          <span>${b.wpi_formulieren ? b.wpi_formulieren.naam : '—'}</span>
+          <div style="display:flex; align-items:center; gap:8px">
+            <span class="tag" style="${b.afgerond ? 'background:var(--green-dim); color:var(--green);' : 'background:var(--amber-dim); color:var(--amber);'}">${b.afgerond ? 'Afgerond' : 'Onderweg'}</span>
+            ${b.afgerond ? `<button class="ghost" style="padding:4px 9px" onclick="event.stopPropagation(); verbergBezoek('${b.id}')">Verbergen</button>` : ''}
+          </div>
+        </div>
+        <div class="meta" style="margin-top:6px">${new Date(b.aangemaakt_op).toLocaleString('nl-NL')} ${!b.afgerond ? '· tik om verder te gaan' : ''}</div>
+      </div>`).join('') || '<div class="meta">Nog geen eerdere bezoeken.</div>';
+    return `
+      <div class="row" style="margin-bottom:16px">
+        <span class="meta">${(bezoeken||[]).filter(b=>b.afgerond).length} afgeronde bezoeken</span>
+        <button class="primary" onclick="scherm='kiezen'; render();">+ Nieuw bezoek starten</button>
+      </div>
+      ${rows}
+    `;
+  }
+
+  async function renderKiezen(){
+    const { data: formulieren, error } = await supabaseClient
+      .from('wpi_formulieren').select('*').eq('actief', true).eq('soort', 'wpi').order('naam');
+    if(error) return '<div class="fout">Kon formulieren niet laden: ' + error.message + '</div>';
+    const rows = (formulieren||[]).map(f => `
+      <div class="card row">
+        <span>${f.naam}</span>
+        <button class="primary" onclick="startBezoek('${f.id}')">Starten</button>
+      </div>`).join('') || '<div class="meta">Geen actieve formulieren beschikbaar.</div>';
+    return `<button class="ghost" style="margin-bottom:14px" onclick="scherm='lijst'; render();">← Terug</button>${rows}`;
+  }
+
+  async function verbergBezoek(id){
+    if(!confirm('Dit bezoek uit jouw eigen lijst verbergen? Het blijft gewoon bewaard voor KAM en de compliance-cijfers.')) return;
+    const { error } = await supabaseClient.from('wpi_bezoeken').update({ verborgen_voor_uitvoerder: true }).eq('id', id);
+    if(error){ alert('Verbergen mislukt: ' + error.message); return; }
+    await render();
+  }
+
+  let wachtendFormulierId = null;
+
+  async function startBezoek(formulierId){
+    const { data: bestaand } = await supabaseClient
+      .from('wpi_bezoeken').select('*').eq('formulier_id', formulierId).eq('uitvoerder_id', huidigProfiel.id).eq('afgerond', false).maybeSingle();
+
+    if(bestaand){
+      await openBezoekVoorInvullen(bestaand, formulierId);
+      return;
+    }
+
+    // Nieuw bezoek: eerst locatie/project laten kiezen, vóórdat het bezoek zelf aangemaakt wordt.
+    wachtendFormulierId = formulierId;
+    scherm = 'locatieKiezen';
+    await render();
+    await vulLocatieKiezerVoorBezoek();
+  }
+
+  async function vulLocatieKiezerVoorBezoek(){
+    const { data: regios } = await supabaseClient.from('regios').select('*').eq('organisatie_id', huidigProfiel.organisatie_id).order('naam');
+    const regioSelect = document.getElementById('lkRegio');
+    if(!regioSelect) return;
+    regioSelect.innerHTML = '<option value="">Regio — geen keuze</option>' + (regios||[]).map(r => `<option value="${r.id}">${r.naam}</option>`).join('');
+    await lkRegioGewijzigd();
+  }
+
+  async function lkRegioGewijzigd(){
+    const regioId = document.getElementById('lkRegio').value;
+    let query = supabaseClient.from('vestigingen').select('*').eq('organisatie_id', huidigProfiel.organisatie_id).order('naam');
+    if(regioId) query = query.eq('regio_id', regioId);
+    const { data: vestigingen } = await query;
+    document.getElementById('lkVestiging').innerHTML = '<option value="">Vestiging — geen keuze</option>' + (vestigingen||[]).map(v => `<option value="${v.id}">${v.naam}</option>`).join('');
+    const { data: locaties } = await supabaseClient.from('locaties').select('*').eq('organisatie_id', huidigProfiel.organisatie_id).order('naam');
+    document.getElementById('lkLocatie').innerHTML = '<option value="">Locatie/project — geen keuze</option>' + (locaties||[]).map(l => `<option value="${l.id}">${l.naam}</option>`).join('');
+  }
+
+  function renderLocatieKiezen(){
+    return `
+      <button class="ghost" style="margin-bottom:14px" onclick="scherm='lijst'; wachtendFormulierId=null; render();">← Terug</button>
+      <div class="card">
+        <div class="eyebrow" style="margin-top:0">Waar voer je dit bezoek uit? (optioneel)</div>
+        <div class="meta" style="margin-bottom:10px">Zo kan achteraf gefilterd worden hoeveel WPI/MBB er per locatie, vestiging en regio zijn uitgevoerd.</div>
+        <select id="lkRegio" onchange="lkRegioGewijzigd()"><option value="">Regio — geen keuze</option></select>
+        <select id="lkVestiging" style="margin-top:8px"><option value="">Vestiging — geen keuze</option></select>
+        <select id="lkLocatie" style="margin-top:8px"><option value="">Locatie/project — geen keuze</option></select>
+        <button class="primary" style="margin-top:16px; width:100%" onclick="bevestigLocatieEnStart()">Bezoek starten</button>
+      </div>
+    `;
+  }
+
+  async function bevestigLocatieEnStart(){
+    const locatie_id = document.getElementById('lkLocatie').value || null;
+    const vestiging_id = document.getElementById('lkVestiging').value || null;
+    const { data: nieuw, error: bezoekFout } = await supabaseClient
+      .from('wpi_bezoeken').insert({ organisatie_id: huidigProfiel.organisatie_id, formulier_id: wachtendFormulierId, uitvoerder_id: huidigProfiel.id, locatie_id, vestiging_id })
+      .select().single();
+    if(bezoekFout){ alert('Bezoek starten mislukt: ' + bezoekFout.message); return; }
+    const formulierId = wachtendFormulierId;
+    wachtendFormulierId = null;
+    await openBezoekVoorInvullen(nieuw, formulierId);
+  }
+
+  async function openBezoekVoorInvullen(bezoek, formulierId){
+    const { data: formulier } = await supabaseClient.from('wpi_formulieren').select('*').eq('id', formulierId).single();
+    const { data: vragen, error: vragenFout } = await supabaseClient
+      .from('wpi_vragen').select('*').eq('formulier_id', formulierId).order('volgorde');
+    if(vragenFout){ alert('Vragen laden mislukt: ' + vragenFout.message); return; }
+
+    actiefBezoek = { id: bezoek.id, formulier, vragen: vragen||[], antwoorden:{}, fotos:{}, previews:{}, onderbouwingen:{} };
+    scherm = 'invullen';
+    await render();
+  }
+
+  function beantwoord(vraagId, waarde){
+    actiefBezoek.antwoorden[vraagId] = waarde;
+    render();
+  }
+  // Bepaalt of een foto "net genomen" is (EXIF-opnametijd, of anders bestandsdatum, binnen 5 minuten van nu).
+  // Alleen dán vragen we locatietoestemming en branden we tijd+locatie zichtbaar in de foto — bij een foto
+  // uit de galerij (ouder bestand) doen we dat bewust niet, want die tijd/locatie zou misleidend kunnen zijn.
+  async function bepaalOpnameMoment(file){
+    let opnameTijd = null;
+    try{
+      if(window.exifr){
+        const exif = await exifr.parse(file, ['DateTimeOriginal', 'CreateDate']);
+        if(exif) opnameTijd = exif.DateTimeOriginal || exif.CreateDate || null;
+      }
+    }catch(e){ /* geen EXIF, geen probleem */ }
+    if(!opnameTijd) opnameTijd = new Date(file.lastModified);
+    const minutenGeleden = (Date.now() - opnameTijd.getTime()) / 60000;
+    return { opnameTijd, isNetGenomen: minutenGeleden > -5 && minutenGeleden < 5 };
+  }
+
+  async function vraagLocatieOp(){
+    if(!navigator.geolocation) return null;
+    try{
+      const positie = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+      });
+      return `${positie.coords.latitude.toFixed(5)}, ${positie.coords.longitude.toFixed(5)}`;
+    }catch(e){ return null; } // toestemming geweigerd of mislukt — gewoon zonder locatie doorgaan
+  }
+
+  function tekenOverlay(ctx, width, height, regels){
+    const fontGrootte = Math.max(14, Math.round(width / 40));
+    ctx.font = `${fontGrootte}px sans-serif`;
+    ctx.textBaseline = 'bottom';
+    const regelHoogte = fontGrootte * 1.3;
+    const padding = fontGrootte * 0.5;
+    const breedste = Math.max(...regels.map(t => ctx.measureText(t).width));
+    const blokHoogte = regels.length * regelHoogte + padding;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(width - breedste - padding*2, height - blokHoogte, breedste + padding*2, blokHoogte);
+    ctx.fillStyle = '#fff';
+    regels.forEach((regel, i) => {
+      ctx.fillText(regel, width - breedste - padding, height - padding - (regels.length-1-i)*regelHoogte);
+    });
+  }
+
+  async function verwerkFotoMetOverlay(file){
+    const { opnameTijd, isNetGenomen } = await bepaalOpnameMoment(file);
+    const locatieTekst = isNetGenomen ? await vraagLocatieOp() : null;
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = (e) => { img.src = e.target.result; };
+      reader.onerror = () => reject(new Error('Bestand kon niet gelezen worden.'));
+      img.onload = () => {
+        const MAX = 1600;
+        let { width, height } = img;
+        if(width > MAX || height > MAX){
+          const schaal = MAX / Math.max(width, height);
+          width = Math.round(width * schaal);
+          height = Math.round(height * schaal);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        if(isNetGenomen){
+          const regels = [opnameTijd.toLocaleString('nl-NL')];
+          if(locatieTekst) regels.push(locatieTekst);
+          tekenOverlay(ctx, width, height, regels);
+        }
+        canvas.toBlob((blob) => {
+          if(!blob){ reject(new Error('Comprimeren mislukt.')); return; }
+          resolve(blob);
+        }, 'image/jpeg', 0.8);
+      };
+      img.onerror = () => reject(new Error('Foto kon niet geladen worden.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadFoto(vraagId, inputEl){
+    const file = inputEl.files[0];
+    if(!file) return;
+    actiefBezoek.previews[vraagId] = URL.createObjectURL(file);
+    const statusEl = document.getElementById('fotoStatus' + vraagId);
+    if(statusEl){ statusEl.textContent = 'Verwerken…'; statusEl.className = 'meta'; }
+    let blob;
+    try{
+      blob = await verwerkFotoMetOverlay(file);
+    }catch(e){
+      if(statusEl){ statusEl.textContent = 'Verwerken mislukt: ' + e.message; statusEl.className = 'fout'; }
+      return;
+    }
+    if(statusEl){ statusEl.textContent = 'Uploaden…'; statusEl.className = 'meta'; }
+    const pad = `${huidigProfiel.organisatie_id}/${actiefBezoek.id}/${vraagId}-${Date.now()}.jpg`;
+    const { error } = await supabaseClient.storage.from('wpi-fotos').upload(pad, blob);
+    if(error){
+      if(statusEl){ statusEl.textContent = 'Upload mislukt: ' + error.message; statusEl.className = 'fout'; }
+      return;
+    }
+    actiefBezoek.fotos[vraagId] = pad;
+    render();
+  }
+  function isNegatief(v, antwoord){
+    if(v.type === 'slecht/matig/goed') return antwoord === 'slecht';
+    if(v.type === 'open') return !!(antwoord && antwoord.trim());
+    return antwoord === 'nee';
+  }
+
+  function renderInvullen(){
+    const { formulier, vragen, antwoorden, fotos, previews } = actiefBezoek;
+    const rows = vragen.map(v => {
+      const antwoord = antwoorden[v.id];
+      const negatief = antwoord && isNegatief(v, antwoord);
+      const verplichteFoto = false; // bewust nooit verplicht — voorkomt dat mensen een eerlijk negatief antwoord vermijden om de foto-drempel te ontlopen
+      const toonFotoBlok = (v.kritiek && negatief) || v.foto_optie;
+
+      let invoerHtml;
+      if(v.type === 'open'){
+        invoerHtml = `<input type="text" placeholder="Antwoord" value="${antwoord||''}" oninput="actiefBezoek.antwoorden['${v.id}']=this.value" style="margin-top:10px">`;
+      } else {
+        const opties = v.type === 'slecht/matig/goed' ? ['slecht','matig','goed'] : ['nee','ja'];
+        const knoppen = opties.map(o => `<button class="${antwoord===o?'actief':''}" onclick="beantwoord('${v.id}','${o}')">${o[0].toUpperCase()+o.slice(1)}</button>`).join('');
+        invoerHtml = `<div class="toggle" style="margin-top:10px">${knoppen}</div>`;
+      }
+
+      return `
+        <div class="card">
+          <div class="row">
+            <span style="max-width:75%">${v.tekst}</span>
+            ${v.kritiek ? '<span class="tag kritiek">kritiek</span>' : ''}
+          </div>
+          ${invoerHtml}
+          ${v.onderbouwing_optie ? `
+            <div style="margin-top:10px">
+              <label style="margin:0 0 5px">Onderbouwing (optioneel)</label>
+              <textarea rows="2" placeholder="Lichting toe waarom je dit antwoord gaf…" oninput="actiefBezoek.onderbouwingen['${v.id}']=this.value">${actiefBezoek.onderbouwingen[v.id]||''}</textarea>
+            </div>
+          ` : ''}
+          ${toonFotoBlok ? `
+            <div style="margin-top:10px">
+              <label style="margin:0 0 5px">Foto (optioneel, als bewijs)</label>
+              ${fotos[v.id] ? `
+                ${previews[v.id] ? `<img src="${previews[v.id]}" style="width:100%; max-width:220px; border-radius:8px; margin-bottom:8px; display:block;">` : ''}
+                <div class="meta" style="margin-bottom:6px">✓ Geüpload</div>
+                <label class="ghost" style="display:inline-block; padding:7px 12px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer; margin:0;">
+                  Andere foto kiezen
+                  <input type="file" accept="image/*" capture="environment" onchange="uploadFoto('${v.id}', this)" style="display:none;">
+                </label>
+              ` : `
+                <input type="file" accept="image/*" capture="environment" onchange="uploadFoto('${v.id}', this)">
+                <div class="meta" id="fotoStatus${v.id}" style="margin-top:4px"></div>
+              `}
+            </div>
+          ` : ''}
+        </div>`;
+    }).join('');
+
+    const onbeantwoord = vragen.some(v => !antwoorden[v.id]);
+    const magAfronden = !onbeantwoord;
+
+    return `
+      <button class="ghost" style="margin-bottom:14px" onclick="annuleerBezoek()">← Annuleren</button>
+      <div class="card" style="margin-bottom:16px"><b>${formulier.naam}</b></div>
+      ${rows}
+      <div class="row" style="margin:18px 0 30px">
+        <span class="meta">${onbeantwoord ? 'Beantwoord eerst alle vragen.' : 'Klaar om af te ronden.'}</span>
+        <button class="primary" ${magAfronden?'':'disabled'} onclick="rondBezoekAf()">Bezoek afronden</button>
+      </div>
+      <div class="fout verborgen" id="invulFout"></div>
+    `;
+  }
+
+  async function annuleerBezoek(){
+    const paden = Object.values(actiefBezoek.fotos);
+    if(paden.length) await supabaseClient.storage.from('wpi-fotos').remove(paden);
+    await supabaseClient.from('wpi_bezoeken').delete().eq('id', actiefBezoek.id);
+    actiefBezoek = null;
+    scherm = 'lijst';
+    await render();
+  }
+
+  async function rondBezoekAf(){
+    const { vragen, antwoorden, fotos, onderbouwingen, id } = actiefBezoek;
+    const rijen = vragen.map(v => ({
+      bezoek_id: id, vraag_id: v.id, antwoord: antwoorden[v.id], foto_pad: fotos[v.id] || null,
+      onderbouwing: (onderbouwingen[v.id] || '').trim() || null
+    }));
+    const { error: antwoordFout } = await supabaseClient.from('wpi_antwoorden').insert(rijen);
+    if(antwoordFout){
+      document.getElementById('invulFout').textContent = 'Opslaan mislukt: ' + antwoordFout.message;
+      document.getElementById('invulFout').classList.remove('verborgen');
+      return;
+    }
+    const { error: bezoekFout } = await supabaseClient.from('wpi_bezoeken').update({ afgerond: true }).eq('id', id);
+    if(bezoekFout){
+      document.getElementById('invulFout').textContent = 'Afronden mislukt: ' + bezoekFout.message;
+      document.getElementById('invulFout').classList.remove('verborgen');
+      return;
+    }
+    actiefBezoek = null;
+    scherm = 'lijst';
+    await render();
+  }
+
+  if(supabaseClient){
+    supabaseClient.auth.getSession().then(({ data:{ session } }) => {
+      document.getElementById('laad-scherm').style.display = 'none';
+      if(session) initApp();
+      else document.getElementById('login-scherm').classList.remove('verborgen');
+    });
+  } else {
+    document.getElementById('laad-scherm').style.display = 'none';
+    document.getElementById('login-scherm').classList.remove('verborgen');
+  }
+</script>
+</body>
+</html>
